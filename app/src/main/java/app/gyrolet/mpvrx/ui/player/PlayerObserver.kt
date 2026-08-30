@@ -69,6 +69,22 @@ class PlayerObserver(
     }
   }
 
+  /**
+   * A raw eof-reached=true property edge is not enough to decide playlist navigation for remote
+   * media: a failed/stopped stream can briefly expose that flag too. Drive auto-next only from the
+   * matching END_FILE event when libmpv explicitly reports reason=eof.
+   *
+   * Do not compare time-pos with duration here. WebDAV/proxy playback can deliver a slightly stale
+   * last position at a legitimate EOF; rejecting that EOF leaves the session ended and paused with
+   * no next-item request, which is worse than the original bug.
+   */
+  private fun isNaturalEndFile(data: MPVNode): Boolean {
+    val reasonNode = data["reason"] ?: return false
+    val textReason = runCatching { reasonNode.asString() }.getOrNull()
+    if (textReason != null) return textReason.equals("eof", ignoreCase = true)
+    return runCatching { reasonNode.asInt()?.toInt() == END_FILE_REASON_EOF }.getOrDefault(false)
+  }
+
   override fun eventProperty(property: String) {
     if (shouldIgnoreCallback()) return
     activity.runOnUiThread {
@@ -96,6 +112,9 @@ class PlayerObserver(
     value: Boolean,
   ) {
     if (shouldIgnoreCallback()) return
+    // Keep false flowing so PlayerActivity can clear a completed/cancelled EOF transition. Only
+    // the unqualified true edge is suppressed; a validated true is emitted from END_FILE below.
+    if (property == "eof-reached" && value) return
     activity.runOnUiThread {
       if (!shouldIgnoreCallback()) activity.onObserverEvent(property, value)
     }
@@ -142,12 +161,20 @@ class PlayerObserver(
     data: MPVNode,
   ) {
     if (shouldIgnoreCallback()) return
+    val naturalEnd = eventId == MPVLib.MpvEvent.MPV_EVENT_END_FILE && isNaturalEndFile(data)
     activity.runOnUiThread {
       if (shouldIgnoreCallback()) return@runOnUiThread
       activity.event(eventId)
       if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED) {
         requestStretchVideoOrientationUpdate()
       }
+      if (naturalEnd) {
+        activity.onObserverEvent("eof-reached", true)
+      }
     }
+  }
+
+  private companion object {
+    const val END_FILE_REASON_EOF = 0
   }
 }
