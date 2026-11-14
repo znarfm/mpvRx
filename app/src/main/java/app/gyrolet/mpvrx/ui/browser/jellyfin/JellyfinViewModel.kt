@@ -205,13 +205,30 @@ class JellyfinViewModel(
       item.playableUri.startsWith(serverUrl, ignoreCase = true)
   }
 
+  private fun filterResumeItems(items: List<JellyfinItem>): List<JellyfinItem> {
+    val seenSeriesIds = HashSet<String>()
+    val seenItemIds = HashSet<String>()
+    return items.filter { item ->
+      if (item.isAudio || item.isSeries || item.isSeason || item.isFolder ||
+        item.type == "Series" || item.type == "Season" || item.type == "Folder" ||
+        item.type == "MusicAlbum" || item.type == "Audio" || item.type == "MusicArtist" ||
+        item.type == "CollectionFolder"
+      ) {
+        return@filter false
+      }
+      if (!seenItemIds.add(item.id)) return@filter false
+      val seriesId = item.seriesId?.takeIf { it.isNotBlank() }
+      seriesId == null || seenSeriesIds.add(seriesId)
+    }
+  }
+
   fun refreshPlaybackStateSilently() {
     val server = _uiState.value.activeServer ?: return
     viewModelScope.launch(Dispatchers.IO) {
       delay(400) // Brief delay to ensure Jellyfin server has committed the stop/progress session data
       val resumeResult = jellyfinRepository.getResumeItems(server, limit = 16).getOrNull()
       if (resumeResult != null) {
-        _uiState.update { it.copy(resumeItems = resumeResult) }
+        _uiState.update { it.copy(resumeItems = filterResumeItems(resumeResult)) }
       }
 
       val detail = _uiState.value.detailItem
@@ -370,7 +387,7 @@ class JellyfinViewModel(
           return true
         }
 
-        val resume = resumeRaw.filter { isVideoMedia(it) }
+        val resume = filterResumeItems(resumeRaw)
 
         // Fetch latest media for each non-music library concurrently
         val videoLibs = libs.filter { !isMusicLibrary(it) }

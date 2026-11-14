@@ -351,7 +351,7 @@ class JellyfinClient(
       runCatching {
         val base = normalizeUrl(serverUrl)
         val endpoint =
-          "$base/Users/$userId/Items/Resume?Limit=$limit&Fields=Overview,PrimaryImageAspectRatio,UserData,SeriesName,SeriesId,SeriesPrimaryImageTag,SeasonName,IndexNumber,ParentIndexNumber,MediaSources,MediaStreams,Genres,OfficialRating,CommunityRating,CriticRating,ProductionYear,Taglines,PremiereDate,Status"
+          "$base/Users/$userId/Items/Resume?Limit=$limit&MediaTypes=Video&Fields=Overview,PrimaryImageAspectRatio,UserData,SeriesName,SeriesId,SeriesPrimaryImageTag,SeasonName,IndexNumber,ParentIndexNumber,MediaSources,MediaStreams,Genres,OfficialRating,CommunityRating,CriticRating,ProductionYear,Taglines,PremiereDate,Status"
         val request =
           Request
             .Builder()
